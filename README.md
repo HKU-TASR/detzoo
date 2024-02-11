@@ -14,7 +14,7 @@ Unfortunately, the reality is that sourcing these algorithms can be daunting. Re
 
 `detzoo` is built with a range of features that make it a powerful tool for researchers and practitioners in the field of object detection. Here are some of the key features:
 
-- **Support for Popular Datasets**: `detzoo` is designed to work seamlessly with widely-used datasets in the field of object detection, including PASCAL VOC and MS COCO. This integration allows users to easily train and test models with standard benchmarks in the industry.
+- **Support for Popular Datasets**: `detzoo` is designed to work seamlessly with widely-used datasets in the field of object detection, including [PASCAL VOC 2007](http://host.robots.ox.ac.uk/pascal/VOC/voc2007/index.html), [PASCAL VOC 2012](http://host.robots.ox.ac.uk/pascal/VOC/voc2012/index.html) and [MS COCO 2017](https://cocodataset.org/#home). This integration allows users to easily train and test models with standard benchmarks in the industry.
 - **Collection of SOTA Algorithms**: The library includes a comprehensive collection of the latest and most popular state-of-the-art object detection algorithms. These algorithms are continually updated and maintained to ensure users have access to the most advanced tools in the field.
 - **Unified and User-Friendly Interface**: One of the core strengths of `detzoo` is its unified interface, which simplifies the process of working with different object detection models. This user-friendly interface ensures that researchers and developers can focus on their experiments and applications, rather than dealing with the complexities of integrating various algorithms.
 - **Efficient Training and Testing**: With `detzoo`, users can quickly set up training and testing environments. The library is optimized for performance, allowing for faster experimentation cycles, which is crucial for research and development.
@@ -116,12 +116,10 @@ You are now ready to use `detzoo` for your object detection tasks. For detailed 
    - **Description**: FPN is an architecture that uses a top-down approach with lateral connections to build high-level semantic feature maps at all scales, enhancing object detection performance, especially for small objects.
    - **Use Case**: Great for detecting objects across a range of sizes and in complex images.
    - **Source Code**: 
-   - **Implemented in `detzoo`**: Adapted for seamless integration and compatibility with various backbones.
 3. **YOLOv4**:
    - **Description**: YOLOv4 is known for its speed and accuracy, making real-time object detection possible. It applies advancements like Weighted-Residual-Connections (WRC), Cross-Stage-Partial-connections (CSP), and Cross mini-Batch Normalization (CmBN).
    - **Use Case**: Perfect for real-time detection scenarios, such as video analysis and autonomous driving.
    - **Source Code**: 
-   - **Implemented in `detzoo`**: Provides a PyTorch version of YOLOv4, maintaining its speed and efficiency.
 
 ## Contributing
 
@@ -131,7 +129,7 @@ You are now ready to use `detzoo` for your object detection tasks. For detailed 
 
 `detzoo` is open-sourced under the MIT License. This license permits almost unrestricted freedom to use, modify, and distribute the software, provided that the original copyright and license notice are included with any substantial portion of the code.
 
-For more details, see the https://github.com/tju2050633/detzoo/main/LICENSE file in the repository.
+For more details, see the [LICENSE](https://github.com/tju2050633/detzoo/main/LICENSE) file in the repository.
 
 ## Citations
 
