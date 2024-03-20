@@ -1,4 +1,5 @@
 .DS_Store
-data/
+.pytest_cache
 __pycache__
 checkpoints
+bin
