@@ -4,20 +4,23 @@ from torchvision.datasets.utils import download_and_extract_archive
 from torchvision.datasets import VisionDataset
 from PIL import Image
 from urllib.error import URLError
+import xml.etree.ElementTree as ET
 
 class VOCDataset(VisionDataset):
-    def __init__(self, root, year, train=True, download=False, transform=None):
+    def __init__(self, root, year='2007', train=True, download=False, transform=None):
         super(VOCDataset, self).__init__(root, transform=transform)
-        self.year = year  # The year of the VOC dataset
-        self.train = train  # Whether to load the training set
+        if year not in ["2007", "2012"]:
+            raise ValueError("Year of VOC dataset must be '2007' or '2012'")
+        self.year = year
+        self.train = train
 
-        # Define the paths for the data, images, annotations, and image sets
-        self.data_folder = os.path.join(root, 'VOC{}'.format(year))
+        # The paths for the data, images, annotations, and image sets
+        self.data_folder = os.path.join(root, 'VOC{}'.format(year), '{}'.format('trainval' if train else 'test'))
         self.image_folder = os.path.join(self.data_folder, 'JPEGImages')
         self.annotation_folder = os.path.join(self.data_folder, 'Annotations')
         self.image_sets_path = os.path.join(self.data_folder, 'ImageSets', 'Main', '{}.txt'.format('trainval' if train else 'test'))
 
-        # Define the resources for downloading the VOC dataset
+        # The resources for downloading the VOC dataset
         resources = {
             '2007': {
                 'trainval': ('http://host.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtrainval_06-Nov-2007.tar', 'a442f751799d7e0974a3d4f5c8b5b5b3'),
@@ -29,18 +32,15 @@ class VOCDataset(VisionDataset):
             }
         }
 
-        # Download the dataset if specified
         if download:
             self.download(resources)
 
-        # Initialize lists for storing image and annotation paths
         self.images = []
         self.annotations = []
-        with open(image_sets_path) as f:
+        with open(self.image_sets_path) as f:
             image_ids = f.readlines()
         image_ids = [x.strip() for x in image_ids]
 
-        # Add the paths of the images and annotations to the lists
         for img_id in image_ids:
             image_path = os.path.join(self.image_folder, img_id + '.jpg')
             annotation_path = os.path.join(self.annotation_folder, img_id + '.xml')
@@ -50,16 +50,12 @@ class VOCDataset(VisionDataset):
                 self.annotations.append(annotation_path)
 
     def download(self, resources):
-        # Check if the dataset already exists
         if self._check_exists():
             return
 
-        # Create the root directory if it does not exist
         os.makedirs(self.root, exist_ok=True)
 
-        # Define the URL and filename for downloading the dataset
-        trainval_or_test = 'trainval' if self.train else 'test'
-        url, md5 = resources[self.year][trainval_or_test]
+        url, md5 = resources[self.year]['trainval' if self.train else 'test']
         filename = 'VOC{}'.format(self.year)
 
         # Download and extract the dataset
@@ -98,13 +94,13 @@ class VOCDataset(VisionDataset):
             # Append label and bounding box to target list
             target.append({'label': label, 'bbox': bbox})
 
-        # Apply transformations
         if self.transform is not None:
             img = self.transform(img)
 
         return img, target
 
     def __len__(self):
-        # Return the number of samples in dataset
         return len(self.images)
 
+# Usage example:
+# dataset = VOCDataset(root='/path/to/voc', year='2007', train=True)
