@@ -1,11 +1,13 @@
 import torch
 import torch.nn as nn
 from torchvision.models import *
+from torch.optim import Adam
 
 class BaseDetector(nn.Module):
     def __init__(self, classes, backbone=''):
         super(BaseDetector, self).__init__()
         self.classes = classes
+        self.num_classes = len(classes)
 
         # Define the supported backbones
         # Concrete backbone selection is done in the derived class
@@ -20,32 +22,33 @@ class BaseDetector(nn.Module):
             raise ValueError('Invalid backbone')
         self.backbone = backbone
 
-    def _model_w_backbone(self):
-        """
-        Implementation depends on the specific detector.
-        """
-        raise NotImplementedError
-
-    def _model_wo_backbone(self):
-        """
-        Implementation depends on the specific detector.
-        """
-        raise NotImplementedError
-
     def forward(self, image):
         """
-        Implementation depends on the specific detector.
+        Network forward pass.
         """
         raise NotImplementedError
 
     def loss(self, prediction, label):
         """
-        Implementation depends on the specific detector.
+        Compute the loss.
+        """
+        raise NotImplementedError
+
+    def fit(self, 
+            train_loader, 
+            epochs,
+            optimizer=Adam(params=self.parameters(), lr=0.001, betas=(0.9, 0.999)),
+            scheduler=None,
+            device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
+            save_dir='checkpoints',
+        ):
+        """
+        Train the model.
         """
         raise NotImplementedError
 
     def run(self, image):
         """
-        Implementation depends on the specific detector.
+        Run the model on the input image. For testing stage.
         """
         raise NotImplementedError

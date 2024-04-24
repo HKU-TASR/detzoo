@@ -22,6 +22,10 @@ class VOCDataset(Dataset):
         if image_set not in ["train", "val", "trainval"]:
             raise ValueError("Image set must be 'train', 'val', or 'trainval'")
 
+        if os.path.exists(os.path.join(root, "VOCdevkit", "VOC" + year)):
+            download = False
+            print("VOC dataset already exists")
+
         self.dataset = VOCDetection(
             root=root,
             year=year,
@@ -47,6 +51,7 @@ class VOCDataset(Dataset):
             <PIL Image>, 
             {
                 'boxes': <torch.Tensor>, # Shape (N, 4) (xmin, ymin, xmax, ymax)
+                'confidences': <torch.Tensor>, # Shape (N,)
                 'labels': <torch.Tensor> # Shape (N,)
             }
         )

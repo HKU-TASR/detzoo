@@ -12,9 +12,10 @@ def plot_image_and_boxes(image, target, classes, yolo_format=False, S=7, B=2):
     width, height = image.shape[1], image.shape[0]
     fig, ax = plt.subplots(1)
     ax.imshow(image)
+    plt.axis('off')
 
     # Define a list of colors for different classes
-    colors = ['r', 'g', 'b', 'c', 'm', 'y', 'k']
+    colors = ['r', 'b', 'g', 'c', 'm', 'y', 'k']
     category_color = {}
     color_index = 0
 

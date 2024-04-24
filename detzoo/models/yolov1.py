@@ -1,7 +1,9 @@
+import os
+from tqdm import tqdm
 import torch
 from torch import nn
 from . import BaseDetector
-from ..utils import iou, Reshape, PrintShape, keep_convs_only, yolo_to_bbox_format
+from ..utils import *
 
 class YOLOv1(BaseDetector):
     def __init__(self, 
@@ -18,16 +20,13 @@ class YOLOv1(BaseDetector):
         self.image_size = image_size
         self.S = S
         self.B = B
-        self.num_classes = len(self.classes)
         self.D = B * 5 + self.num_classes
         self.lambda_coord = lambda_coord
         self.lambda_noobj = lambda_noobj
         
         if self.backbone != '':
-            # If a backbone is provided, use it as the feature extraction network
             self.model = self._model_w_backbone()
         else:
-            # If no backbone is provided, use a custom feature extraction network
             self.model = self._model_wo_backbone()
 
     def _model_w_backbone(self):
@@ -207,6 +206,53 @@ class YOLOv1(BaseDetector):
 
         return total_loss / b_size
 
+    def fit(self, 
+            train_loader, 
+            epochs,
+            optimizer=Adam(params=self.parameters(), lr=0.001, betas=(0.9, 0.999)),
+            scheduler=None,
+            device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
+            save_dir='checkpoints',
+        ):
+        print('YOLOv1 training started...')
+
+        self.train()
+        def init_weights(m):
+            if type(m) == nn.Conv2d or type(m) == nn.Linear:
+                nn.init.xavier_uniform_(m.weight)
+                nn.init.zeros_(m.bias)
+        self.apply(init_weights)
+        
+        for epoch in tqdm(range(epochs), desc='Epoch'):
+            for image, targets in tqdm(train_dataloader, desc='Train', leave=False):
+                # For YOLO models
+                targets = self._bbox_to_yolo_format(targets)
+
+                # put data to device
+                image = image.to(device)
+                targets = targets.to(device)
+
+                # clear grad for each iteration
+                self.optimizer.zero_grad()
+
+                # forward
+                prediction = self(image)
+                loss = self.loss(prediction, targets)
+
+                # update
+                loss.backward()
+                self.optimizer.step()
+
+                if scheduler:
+                    scheduler.step()
+
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+        path = os.path.join(save_dir, f'YOLOv1_{backbone}_{dataset}.pth')
+        torch.save(self.state_dict(), path)
+
+        print('YOLOv1 training completed. Model saved at ', path)
+
     def run(self, image):
         '''
         Output shape: list<dictionary<
@@ -220,7 +266,7 @@ class YOLOv1(BaseDetector):
         prediction = self(image)
 
         # convert YOLO tensor to bbox
-        bbox = yolo_to_bbox_format(prediction, (self.image_size, self.image_size), self.S, self.B, self.num_classes)
+        bbox = self._yolo_to_bbox_format(prediction)
         
         # nms
         detection_result = []
@@ -233,3 +279,101 @@ class YOLOv1(BaseDetector):
             })
 
         return detection_result
+
+    def _bbox_to_yolo_format(self, bbox, image_size=(448, 448), S=7, B=2, C=20):
+        """
+        Convert bbox format target to YOLO format for YOLOv1.
+
+        Parameters:
+        - bbox: list of dictionaries<str, torch.Tensor>
+            - 'boxes': Shape (N, 4) # (xmin, ymin, xmax, ymax)
+            - 'confidences': Shape (N,)
+            - 'labels': Shape (N,)
+        - image_size: tuple, (image_width, image_height)
+        - S: the number of grid cells along each dimension
+        - B: the number of bounding boxes per grid cell
+        - C: the number of classes. For VOC, C=20. For COCO, C=80.
+
+        Returns:
+        - yolo: YOLO format target, a tensor of shape (batch_size, S, S, B*5+C)
+            - each 5-tuple is (x, y, w, h, confidence). 
+            - (x, y) is the center of the bounding box relative to the grid cell.
+            - (w, h) is the width and height of the bounding box relative to the image size.
+            - The confidence is 1 if there is an object in the cell, 0 otherwise.
+            - The last C elements are the one-hot encoding of the class.
+        """
+        batch_size = len(bbox)
+        yolo = torch.zeros((batch_size, S, S, B*5+C))
+        width, height = image_size
+        cell_size_x = width / float(S)
+        cell_size_y = height / float(S)
+
+        for batch_idx in range(batch_size):
+            boxes = bbox[batch_idx]['boxes']
+            confidences = bbox[batch_idx]['confidences']
+            labels = bbox[batch_idx]['labels']
+
+            for box, confidence, label in zip(boxes, confidences, labels):
+                xmin, ymin, xmax, ymax = box
+                x, y, w, h = (xmin+xmax)/2.0, (ymin+ymax)/2.0, xmax-xmin, ymax-ymin
+                i, j = int(y / cell_size_x), int(x / cell_size_y)
+                x_cell, y_cell = x / cell_size_x - j, y / cell_size_y - i
+                w_cell, h_cell = w / width, h / height
+                for b in range(B):
+                    if yolo[batch_idx, i, j, b*5+4] == 0:
+                        yolo[batch_idx, i, j, b*5:b*5+2] = torch.tensor([x_cell, y_cell])
+                        yolo[batch_idx, i, j, b*5+2:b*5+4] = torch.tensor([w_cell, h_cell])
+                        yolo[batch_idx, i, j, b*5+4] = confidence
+                        break
+                yolo[batch_idx, i, j, B*5+int(label)] = 1
+
+        return yolo
+
+    def _yolo_to_bbox_format(self, yolo, image_size=(448, 448), S=7, B=2, C=20):
+        """
+        Convert YOLO format target to bbox format.
+
+        Parameters:
+        - yolo: YOLO format target, a tensor of shape (batch_size, S, S, B*5+C)
+        - image_size: tuple, (image_width, image_height)
+        - S: the number of grid cells along each dimension
+        - B: the number of bounding boxes per grid cell
+        - C: the number of classes. For VOC, C=20. For COCO, C=80.
+
+        Returns:
+        - bbox: list of dictionaries<str, torch.Tensor>
+            - 'boxes': Shape (N, 4) # (xmin, ymin, xmax, ymax)
+            - 'confidences': Shape (N,)
+            - 'labels': Shape (N,)
+        """
+        batch_size = yolo.shape[0]
+        width, height = image_size
+        cell_size_x = width / float(S)
+        cell_size_y = height / float(S)
+
+        bbox = []
+        for batch_idx in range(batch_size):
+            boxes = []
+            confidences = []
+            labels = []
+            for i in range(S):
+                for j in range(S):
+                    for b in range(B):
+                        if yolo[batch_idx, i, j, b*5+4] > 0:
+                            x_cell, y_cell, w_cell, h_cell = yolo[batch_idx, i, j, b*5:b*5+4]
+                            x = (j + x_cell) * cell_size_x
+                            y = (i + y_cell) * cell_size_y
+                            w = w_cell * width
+                            h = h_cell * height
+                            xmin = x - w / 2
+                            ymin = y - h / 2
+                            xmax = x + w / 2
+                            ymax = y + h / 2
+                            boxes.append(torch.tensor([xmin, ymin, xmax, ymax]))
+                            confidences.append(yolo[batch_idx, i, j, b*5+4])
+                            labels.append(torch.argmax(yolo[batch_idx, i, j, B*5:B*5+C]))
+
+            if len(boxes) > 0:
+                bbox.append({'boxes': torch.stack(boxes), 'confidences':torch.tensor(confidences), 'labels': torch.tensor(labels)})
+
+        return bbox

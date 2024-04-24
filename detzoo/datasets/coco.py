@@ -26,6 +26,11 @@ class COCODataset(Dataset):
         if image_set not in ["train", "val", "trainval"]:
             raise ValueError("Image set must be 'train', 'val', or 'trainval'")
 
+        self.root = root
+        self.year = year
+        self.image_path = os.path.join(root, image_set + year)
+        self.annotation_path = os.path.join(root, "annotations")
+
         # Resources for downloading the COCO dataset
         resources = {
             '2017': {
@@ -120,6 +125,7 @@ class COCODataset(Dataset):
             <PIL Image>, 
             {
                 'boxes': <torch.Tensor>, # Shape (N, 4) (xmin, ymin, xmax, ymax)
+                'confidences': <torch.Tensor>, # Shape (N,)
                 'labels': <torch.Tensor> # Shape (N,)
             }
         )
