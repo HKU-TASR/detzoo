@@ -26,6 +26,7 @@ class COCODataset(Dataset):
         if image_set not in ["train", "val", "trainval"]:
             raise ValueError("Image set must be 'train', 'val', or 'trainval'")
 
+        self.name = 'COCO'
         self.root = root
         self.year = year
         self.image_path = os.path.join(root, image_set + year)
@@ -42,6 +43,8 @@ class COCODataset(Dataset):
 
         if download:
             self.download(resources)
+        else:
+            assert self._check_exists(), "Dataset not found. You can use download=True to download it"
 
         self.transform = transform
         root_train = os.path.join(root, "train" + year)
@@ -116,7 +119,7 @@ class COCODataset(Dataset):
 
     def _check_exists(self):
         # Check if dataset, images and annotations directories exist
-        return os.path.exists(self.image_folder) and os.path.exists(self.annotation_folder)
+        return os.path.exists(self.image_path) and os.path.exists(self.annotation_path)
 
     def __getitem__(self, i):
         """

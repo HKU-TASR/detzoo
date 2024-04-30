@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 from torchvision.models import *
-from torch.optim import Adam
 
 class BaseDetector(nn.Module):
     def __init__(self, classes, backbone=''):
@@ -12,14 +11,27 @@ class BaseDetector(nn.Module):
         # Define the supported backbones
         # Concrete backbone selection is done in the derived class
         self.supported_backbones = {
-            'alexnet': alexnet(weights=AlexNet_Weights.DEFAULT),
-            'vgg16': vgg16(weights=VGG16_Weights.DEFAULT),
-            'vgg19': vgg19(weights=VGG19_Weights.DEFAULT),
-            'resnet50': resnet50(weights=ResNet50_Weights.DEFAULT),
-            'resnet101': resnet101(weights=ResNet101_Weights.DEFAULT),
+            'alexnet': alexnet,
+            'densenet121': densenet121,
+            'densenet161': densenet161,
+            'densenet169': densenet169,
+            'densenet201': densenet201,
+            'googlenet': googlenet,
+            'inceptionv3': inception_v3,
+            'resnet18': resnet18,
+            'resnet34': resnet34,
+            'resnet50': resnet50,
+            'resnet101': resnet101,
+            'resnet152': resnet152,
+            'vgg11': vgg11,
+            'vgg11_bn': vgg11_bn,
+            'vgg13': vgg13,
+            'vgg13_bn': vgg13_bn,
+            'vgg16': vgg16,
+            'vgg16_bn': vgg16_bn,
+            'vgg19': vgg19,
+            'vgg19_bn': vgg19_bn,
         }
-        if backbone != '' and backbone not in self.supported_backbones.keys():
-            raise ValueError('Invalid backbone')
         self.backbone = backbone
 
     def forward(self, image):
@@ -37,9 +49,9 @@ class BaseDetector(nn.Module):
     def fit(self, 
             train_loader, 
             epochs,
-            optimizer=Adam(params=self.parameters(), lr=0.001, betas=(0.9, 0.999)),
+            optimizer=None,
             scheduler=None,
-            device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
+            device='cuda',
             save_dir='checkpoints',
         ):
         """

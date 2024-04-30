@@ -1,15 +1,21 @@
 import torch
 import os
-import utils
-
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
-def plot_image_and_boxes(image, target, classes, yolo_format=False, S=7, B=2):
-    # image: [H, W, C]
-    # target: {'boxes': (N, 4), 'confidences': (N, ), 'labels': (N,)}
+def plot_image_and_boxes(image, target, classes):
+    # image: tensor([C, H, W])
+    # target: {'boxes': (N, 4), 'confidences': (N, ), 'labels': (N,)} # (xmin, ymin, xmax, ymax)
+
+    # Denormalize the image
+    mean = [0.485, 0.456, 0.406]
+    std = [0.229, 0.224, 0.225]
+    image = image.permute(1, 2, 0).cpu().numpy()
+    image = std * image + mean
+    image = np.clip(image, 0, 1)
     
-    width, height = image.shape[1], image.shape[0]
+    # Create figure and show the image
     fig, ax = plt.subplots(1)
     ax.imshow(image)
     plt.axis('off')
@@ -40,6 +46,3 @@ def plot_image_and_boxes(image, target, classes, yolo_format=False, S=7, B=2):
 
     # Show the figure
     plt.show()
-
-
-

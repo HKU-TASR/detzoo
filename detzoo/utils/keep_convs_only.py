@@ -6,10 +6,11 @@ def keep_convs_only(backbone):
     Remove all layers after the last conv layer in the backbone.
 
     Args:
-    backbone: The backbone model
+        - backbone: The backbone model
 
     Returns:
-    backbone: The backbone model with only conv layers
+        - backbone: The backbone model with only conv layers
+        - out_channels: The number of output channels of the last conv layer
     '''
 
     # Flatten all children modules

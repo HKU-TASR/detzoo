@@ -24,8 +24,9 @@ class VOCDataset(Dataset):
 
         if os.path.exists(os.path.join(root, "VOCdevkit", "VOC" + year)):
             download = False
-            print("VOC dataset already exists")
 
+        self.name = 'VOC'
+        self.year = year
         self.dataset = VOCDetection(
             root=root,
             year=year,

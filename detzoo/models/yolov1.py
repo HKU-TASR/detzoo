@@ -2,14 +2,17 @@ import os
 from tqdm import tqdm
 import torch
 from torch import nn
+from torch.optim import Adam
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 from . import BaseDetector
 from ..utils import *
 
 class YOLOv1(BaseDetector):
     def __init__(self, 
             classes, 
-            backbone='', 
-            image_size = 448,
+            backbone='',
+            image_size=(448, 448),
             S=7, # Number of cells in the grid
             B=2, # Number of bounding boxes per cell
             lambda_coord=5,
@@ -17,6 +20,7 @@ class YOLOv1(BaseDetector):
         ):
         super(YOLOv1, self).__init__(classes, backbone)
 
+        self.name = 'YOLOv1'
         self.image_size = image_size
         self.S = S
         self.B = B
@@ -30,10 +34,13 @@ class YOLOv1(BaseDetector):
             self.model = self._model_wo_backbone()
 
     def _model_w_backbone(self):
-        backbone = self.supported_backbones[self.backbone]
+        backbone = self.supported_backbones[self.backbone](pretrained=True)
         backbone, out_channels = keep_convs_only(backbone)
         backbone.add_module('conv', nn.Conv2d(out_channels, 2048, kernel_size=1))
         backbone.add_module('adaptive_avg_pool', nn.AdaptiveAvgPool2d((2 * self.S, 2 * self.S)))
+
+        for param in backbone.parameters():
+            param.requires_grad = False
 
         model = nn.Sequential(
                 # PrintShape("Input"), # (N, 3, 448, 448)
@@ -141,7 +148,7 @@ class YOLOv1(BaseDetector):
         '''
         Output shape: (N, S, S, D)
         '''
-        assert image.shape[1:] == (3, self.image_size, self.image_size), 'Invalid image shape'
+        assert image.shape[1:] == (3, self.image_size[0], self.image_size[1]), 'Invalid image shape'
         return self.model(image)
 
     def loss(self, prediction, label):
@@ -207,51 +214,78 @@ class YOLOv1(BaseDetector):
         return total_loss / b_size
 
     def fit(self, 
-            train_loader, 
+            dataset,
             epochs,
-            optimizer=Adam(params=self.parameters(), lr=0.001, betas=(0.9, 0.999)),
+            batch_size=8,
+            optimizer=None,
             scheduler=None,
             device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
             save_dir='checkpoints',
+            tensorboard=False,
         ):
-        print('YOLOv1 training started...')
+        print(f'{self.name} training started...')
 
+        # Save directory
+        backbone_name = self.backbone if self.backbone != '' else 'no_backbone'
+        dataset_name = dataset.name + dataset.year
+        output_dir = os.path.join(save_dir, f'{self.name}_{backbone_name}_{dataset_name}')
+        os.makedirs(output_dir, exist_ok=True)
+
+        dataloader = DataLoader(dataset,  batch_size=batch_size,  shuffle=True, collate_fn=collate_fn)
+
+        # Model
         self.train()
         def init_weights(m):
             if type(m) == nn.Conv2d or type(m) == nn.Linear:
                 nn.init.xavier_uniform_(m.weight)
-                nn.init.zeros_(m.bias)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
         self.apply(init_weights)
+
+        if not optimizer:
+            optimizer = Adam(params=self.parameters(), lr=0.001, betas=(0.9, 0.999))
         
-        for epoch in tqdm(range(epochs), desc='Epoch'):
-            for image, targets in tqdm(train_dataloader, desc='Train', leave=False):
+        if tensorboard:
+            writer = SummaryWriter(log_dir=output_dir)
+
+        for epoch in range(1, epochs + 1):
+            total_loss = 0.0
+            for i, (image, targets) in tqdm(enumerate(dataloader), total=len(dataloader)):
                 # For YOLO models
-                targets = self._bbox_to_yolo_format(targets)
+                targets = self._bbox_to_yolo_format(targets, image_size=self.image_size, C=self.num_classes)
 
                 # put data to device
                 image = image.to(device)
                 targets = targets.to(device)
 
                 # clear grad for each iteration
-                self.optimizer.zero_grad()
+                optimizer.zero_grad()
 
                 # forward
                 prediction = self(image)
                 loss = self.loss(prediction, targets)
+                total_loss += loss.item()
 
                 # update
                 loss.backward()
-                self.optimizer.step()
+                optimizer.step()
 
                 if scheduler:
                     scheduler.step()
 
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-        path = os.path.join(save_dir, f'YOLOv1_{backbone}_{dataset}.pth')
+            # log
+            print(f'Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(dataloader):.4f}')
+            if tensorboard:
+                writer.add_scalar('Loss/train', total_loss/len(dataloader), epoch)
+
+        if tensorboard:
+            writer.close()
+
+        # save
+        path = os.path.join(output_dir, 'model.pth')
         torch.save(self.state_dict(), path)
 
-        print('YOLOv1 training completed. Model saved at ', path)
+        print(f'{self.name} training completed. Model saved at ', path)
 
     def run(self, image):
         '''
@@ -261,12 +295,12 @@ class YOLOv1(BaseDetector):
             'labels': torch.Tensor, shape (N,)
         >>
         '''
-        assert image.shape[1:] == (3, self.image_size, self.image_size), 'Invalid image shape'
+        assert image.shape[1:] == (3, self.image_size[0], self.image_size[1]), 'Invalid image shape'
         
         prediction = self(image)
 
         # convert YOLO tensor to bbox
-        bbox = self._yolo_to_bbox_format(prediction)
+        bbox = self._yolo_to_bbox_format(prediction, image_size=self.image_size, C=self.num_classes)
         
         # nms
         detection_result = []
